@@ -15,6 +15,7 @@
     "@langchain/core": "^0.3.42",
     "@langchain/langgraph": "^0.2.52",
     "@langchain/ollama": "^0.2.0",
+    "@langchain/openai": "^0.4.4",
     "@mdxeditor/editor": "^3.25.0",
     "@mui/icons-material": "^6.4.6",
     "@mui/material": "^6.4.6",

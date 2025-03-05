@@ -42,7 +42,7 @@ const UserMenu = () => {
   };
 
   return (
-    <>
+    <div>
       <Tooltip title="User Account">
         <IconButton 
           onClick={handleClick}
@@ -86,7 +86,7 @@ const UserMenu = () => {
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
         {isLoggedIn ? (
-          <>
+          <div>
             <MenuItem>
               <Avatar sx={{ bgcolor: 'primary.light' }}>U</Avatar>
               User Profile
@@ -111,9 +111,9 @@ const UserMenu = () => {
               </ListItemIcon>
               Logout
             </MenuItem>
-          </>
+          </div>
         ) : (
-          <>
+          <div>
             <MenuItem onClick={handleLogin}>
               <ListItemIcon>
                 <LoginIcon fontSize="small" sx={{ color: 'primary.light' }} />
@@ -126,10 +126,10 @@ const UserMenu = () => {
               </ListItemIcon>
               Sign Up
             </MenuItem>
-          </>
+          </div>
         )}
       </Menu>
-    </>
+    </div>
   );
 };
 

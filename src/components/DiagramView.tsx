@@ -1,95 +1,70 @@
-import { useState, useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Paper from '@mui/material/Paper';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import Divider from '@mui/material/Divider';
+import { 
+  ReportProblem as ReportIcon,
+  Event as EventIcon,
+  CheckCircle as CheckCircleIcon,
+  FactCheck as FactCheckIcon,
+  Block as BlockIcon,
+  HelpOutline as HelpOutlineIcon,
+  Delete as DeleteIcon,
+  Save as SaveIcon,
+  Analytics as AnalyticsIcon,
+  ArrowRightAlt as ArrowRightAltIcon
+} from '@mui/icons-material';
 import ReactFlow, { 
   Background, 
   Controls, 
-  MiniMap, 
-  Node, 
-  Edge, 
-  NodeChange, 
-  EdgeChange, 
-  Connection, 
-  addEdge, 
-  applyNodeChanges, 
-  applyEdgeChanges,
+  MiniMap,
   ReactFlowProvider,
-  ReactFlowInstance
+  Panel,
+  NodeRemoveChange
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Box, Paper, Typography, Button, IconButton, Tooltip, Divider, TextField, useTheme as useMuiTheme } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import ZoomInIcon from '@mui/icons-material/ZoomIn';
-import ZoomOutIcon from '@mui/icons-material/ZoomOut';
-import FitScreenIcon from '@mui/icons-material/FitScreen';
-import LightbulbIcon from '@mui/icons-material/Lightbulb';
-import InfoIcon from '@mui/icons-material/Info';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useTheme as useMuiTheme } from '@mui/material';
 import CustomNode from './nodes/CustomNode';
+import CustomEdge from './nodes/CustomEdge';
 import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../App';
+import { useCanvas } from '../context/CanvasContext';
+import { WBANodeType } from '../utils/wbaStateMachine';
 
 // Define custom node types outside the component
 // This prevents the React Flow warning about creating new nodeTypes objects
 const nodeTypesMap = {
   custom: CustomNode,
+  customNode: CustomNode,
 };
 
-// Initial nodes and edges for a simple why-because graph
-const initialNodes: Node[] = [
-  {
-    id: '1',
-    type: 'custom',
-    position: { x: 250, y: 50 },
-    data: { label: 'System Outage', nodeType: 'problem' },
-  },
-  {
-    id: '2',
-    type: 'custom',
-    position: { x: 100, y: 200 },
-    data: { label: 'Database Connection Pool Exhaustion', nodeType: 'cause' },
-  },
-  {
-    id: '3',
-    type: 'custom',
-    position: { x: 400, y: 200 },
-    data: { label: 'Memory Leak in Connection Handling', nodeType: 'cause' },
-  },
-  {
-    id: '4',
-    type: 'custom',
-    position: { x: 100, y: 350 },
-    data: { label: 'Connection Pool Metrics at 100%', nodeType: 'evidence' },
-  },
-  {
-    id: '5',
-    type: 'custom',
-    position: { x: 400, y: 350 },
-    data: { label: 'Memory Usage Increasing Over Time', nodeType: 'evidence' },
-  },
-];
-
-const initialEdges: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', animated: true },
-  { id: 'e1-3', source: '1', target: '3', animated: true },
-  { id: 'e2-4', source: '2', target: '4' },
-  { id: 'e3-5', source: '3', target: '5' },
-];
-
-// Define empty callback props outside component to prevent recreation
-const defaultViewport = { x: 0, y: 0, zoom: 1 };
+const edgeTypesMap = {
+  custom: CustomEdge,
+};
 
 // Add proOptions for panOnDrag settings
 const proOptions = { hideAttribution: false };
 
 const DiagramView = () => {
-  const { currentProject, saveProject } = useAppContext();
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editLabel, setEditLabel] = useState('');
-  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const { aiService } = useAppContext();
+  const { 
+    nodes, 
+    edges, 
+    onNodesChange, 
+    onEdgesChange, 
+    onConnect, 
+    handleAddNode, 
+    selectedNode, 
+    setSelectedNode, 
+    reactFlowInstance, 
+    setReactFlowInstance, 
+    selectedEdgeType, 
+    setSelectedEdgeType,
+    currentProject
+  } = useCanvas();
   
   // Get theme mode and MUI theme for colors
   const { mode } = useTheme();
@@ -97,52 +72,34 @@ const DiagramView = () => {
 
   // Memoize ALL objects and callbacks used in ReactFlow props
   const nodeTypes = useMemo(() => nodeTypesMap, []);
+  const edgeTypes = useMemo(() => edgeTypesMap, []);
   
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
-    []
-  );
-  
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    []
-  );
-
-  const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
-    []
-  );
-
   // Memoize node click handler
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+    (_: React.MouseEvent, node: any) => {
       setSelectedNode(node);
-      setEditLabel(node.data.label);
-      setIsEditing(false);
     },
-    []
+    [setSelectedNode]
   );
 
   // Memoize pane click handler
   const onPaneClick = useCallback(
     () => {
       setSelectedNode(null);
-      setIsEditing(false);
     },
-    []
+    [setSelectedNode]
   );
 
   // Memoize other handlers
   const onInit = useCallback(
-    (instance: ReactFlowInstance) => setReactFlowInstance(instance),
-    []
+    (instance: any) => setReactFlowInstance(instance),
+    [setReactFlowInstance]
   );
 
-  // Add new node
-  const addNode = (type: 'problem' | 'cause' | 'evidence') => {
-    const newNode: Node = {
-      id: `${Date.now()}`,
-      type: 'custom',
+  // Add a node of specific type
+  const addNodeOfType = (type: WBANodeType) => {
+    handleAddNode({
+      type: 'customNode',
       position: { 
         x: Math.random() * 300 + 100, 
         y: Math.random() * 300 + 100 
@@ -152,52 +109,32 @@ const DiagramView = () => {
           ? 'New Problem' 
           : type === 'cause' 
             ? 'New Cause' 
-            : 'New Evidence',
-        nodeType: type
-      },
-    };
-    
-    setNodes((nds) => [...nds, newNode]);
-    setSelectedNode(newNode);
-    setEditLabel(newNode.data.label);
-    setIsEditing(true);
-  };
-
-  // Update node label
-  const updateNodeLabel = () => {
-    if (!selectedNode || !editLabel.trim()) return;
-    
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === selectedNode.id) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              label: editLabel.trim(),
-            },
-          };
-        }
-        return node;
-      })
-    );
-    
-    setIsEditing(false);
+            : type === 'condition'
+              ? 'New Condition'
+              : type === 'action'
+                ? 'New Action'
+                : type === 'omission'
+                  ? 'New Omission'
+                  : 'New Evidence',
+        nodeType: type,
+        description: ''
+      }
+    });
   };
 
   // Delete selected node
   const deleteSelectedNode = () => {
     if (!selectedNode) return;
     
-    // Remove connected edges
-    setEdges((eds) =>
-      eds.filter(
-        (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id
-      )
-    );
+    // Remove the node using the canvas context
+    const changes: NodeRemoveChange[] = [{ 
+      type: 'remove', 
+      id: selectedNode.id 
+    }];
     
-    // Remove node
-    setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id));
+    onNodesChange(changes);
+    
+    // Clear selection
     setSelectedNode(null);
   };
 
@@ -205,196 +142,405 @@ const DiagramView = () => {
   const saveDiagram = () => {
     if (!currentProject) return;
     
-    saveProject({
-      ...currentProject,
-      nodes,
-      edges,
-    });
+    // The canvas context already handles saving, so this is just a placeholder
+    console.log("Diagram saved");
   };
 
   // Add memoized fitViewOptions
   const fitViewOptions = useMemo(() => ({ padding: 0.2 }), []);
 
-  return (
-    <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: '100%', 
-      overflow: 'hidden',
-      bgcolor: 'background.default'
-    }}>
-      {/* Toolbar */}
-      <Paper elevation={0} sx={{ 
-        p: 2, 
-        display: 'flex', 
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        bgcolor: 'background.paper'
-      }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Tooltip title="Add Problem">
-            <Button 
-              variant="outlined" 
-              startIcon={<HelpOutlineIcon />}
-              size="small"
-              onClick={() => addNode('problem')}
-              sx={{ borderColor: 'primary.main', color: 'primary.main' }}
-            >
-              Problem
-            </Button>
-          </Tooltip>
-          
-          <Tooltip title="Add Cause">
-            <Button 
-              variant="outlined" 
-              startIcon={<InfoIcon />}
-              size="small"
-              onClick={() => addNode('cause')}
-              sx={{ borderColor: 'secondary.main', color: 'secondary.main' }}
-            >
-              Cause
-            </Button>
-          </Tooltip>
-          
-          <Tooltip title="Add Evidence">
-            <Button 
-              variant="outlined" 
-              startIcon={<LightbulbIcon />}
-              size="small"
-              onClick={() => addNode('evidence')}
-              sx={{ borderColor: 'text.secondary', color: 'text.secondary' }}
-            >
-              Evidence
-            </Button>
-          </Tooltip>
-        </Box>
-        
-        {selectedNode && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {isEditing ? (
-              <>
-                <TextField
-                  size="small"
-                  value={editLabel}
-                  onChange={(e) => setEditLabel(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && updateNodeLabel()}
-                  autoFocus
-                  sx={{ width: '300px' }}
-                />
-                <Button 
-                  variant="contained" 
-                  size="small"
-                  onClick={updateNodeLabel}
-                >
-                  Save
-                </Button>
-              </>
-            ) : (
-              <>
-                <Typography variant="body2" sx={{ mr: 1 }}>
-                  Selected: <strong>{selectedNode.data.label}</strong>
-                </Typography>
-                <IconButton 
-                  size="small" 
-                  onClick={() => setIsEditing(true)}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-                <IconButton 
-                  size="small" 
-                  onClick={deleteSelectedNode}
-                  color="error"
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </>
-            )}
-          </Box>
-        )}
-        
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button 
-            variant="contained" 
-            size="small"
-            onClick={saveDiagram}
-            disabled={!currentProject}
-          >
-            Save Diagram
-          </Button>
-        </Box>
-      </Paper>
+  const analyzeWithWBA = async () => {
+    if (!aiService || !currentProject) return;
+    
+    try {
+      const analysis = await aiService.analyzeNodes(nodes, edges);
       
-      {/* ReactFlow Canvas */}
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
-        <ReactFlowProvider>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick}
-            onInit={onInit}
-            nodeTypes={nodeTypes}
-            defaultViewport={defaultViewport}
-            fitViewOptions={fitViewOptions}
-            proOptions={proOptions}
-            fitView
-            attributionPosition="bottom-right"
-            className={mode === 'dark' ? 'react-flow-dark-mode' : ''}
-          >
-            <Controls 
-              position="bottom-right"
-              showInteractive={false}
-            />
-            <MiniMap 
-              nodeStrokeWidth={3}
-              zoomable
-              pannable
-              className={mode === 'dark' ? 'react-flow-dark-mode' : ''}
-            />
-            <Background 
-              color={mode === 'dark' ? muiTheme.palette.divider : '#e2e8f0'} 
-              gap={16} 
-              size={1}
-            />
-          </ReactFlow>
-        </ReactFlowProvider>
+      console.log("WBA Analysis:", analysis);
+      
+      alert("Analysis complete. Check the chat for insights.");
+    } catch (error) {
+      console.error("Error analyzing with WBA:", error);
+    }
+  };
+
+  return (
+    <Box 
+      sx={{ 
+        height: '100%', 
+        width: '100%',
+        position: 'relative',
+        bgcolor: mode === 'dark' ? 'background.default' : '#f5f5f5', // Light gray background in light mode
+      }}
+    >
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onInit={onInit}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+        proOptions={proOptions}
+        fitView
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+      >
+        <Background />
+        <Controls position="bottom-right" />
         
-        {/* Zoom controls */}
-        <Paper
-          elevation={1}
-          sx={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            bgcolor: 'background.paper',
-            border: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <IconButton size="small" sx={{ p: 1, color: 'text.primary' }}>
-            <ZoomInIcon fontSize="small" />
-          </IconButton>
-          <Divider />
-          <IconButton size="small" sx={{ p: 1, color: 'text.primary' }}>
-            <ZoomOutIcon fontSize="small" />
-          </IconButton>
-          <Divider />
-          <IconButton size="small" sx={{ p: 1, color: 'text.primary' }}>
-            <FitScreenIcon fontSize="small" />
-          </IconButton>
-        </Paper>
-      </Box>
+        {/* Consolidated toolbar */}
+        <Panel position="top-center">
+          <Paper
+            elevation={3}
+            sx={{
+              p: 1.5,
+              borderRadius: 2,
+              bgcolor: mode === 'dark' 
+                ? muiTheme.palette.background.paper 
+                : muiTheme.palette.common.white,
+              border: '1px solid',
+              borderColor: mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.12)' 
+                : 'rgba(0, 0, 0, 0.12)',
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 1,
+              mb: 1
+            }}
+          >
+            {/* Node creation buttons */}
+            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+              <Typography variant="body2" sx={{ mr: 1, fontWeight: 'medium' }}>
+                Add:
+              </Typography>
+              
+              <Tooltip title="Add Problem Node" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => addNodeOfType('problem')}
+                  sx={{ 
+                    color: muiTheme.palette.primary.main,
+                    bgcolor: muiTheme.palette.primary.main + '16',
+                    '&:hover': { bgcolor: muiTheme.palette.primary.main + '32' }
+                  }}
+                >
+                  <ReportIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Add Cause Node" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => addNodeOfType('cause')}
+                  sx={{ 
+                    color: muiTheme.palette.secondary.main,
+                    bgcolor: muiTheme.palette.secondary.main + '16',
+                    '&:hover': { bgcolor: muiTheme.palette.secondary.main + '32' }
+                  }}
+                >
+                  <EventIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Add Condition Node" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => addNodeOfType('condition')}
+                  sx={{ 
+                    color: muiTheme.palette.info.main,
+                    bgcolor: muiTheme.palette.info.main + '16',
+                    '&:hover': { bgcolor: muiTheme.palette.info.main + '32' }
+                  }}
+                >
+                  <CheckCircleIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Add Action Node" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => addNodeOfType('action')}
+                  sx={{ 
+                    color: muiTheme.palette.warning.main,
+                    bgcolor: muiTheme.palette.warning.main + '16',
+                    '&:hover': { bgcolor: muiTheme.palette.warning.main + '32' }
+                  }}
+                >
+                  <FactCheckIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Add Omission Node" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => addNodeOfType('omission')}
+                  sx={{ 
+                    color: muiTheme.palette.error.main,
+                    bgcolor: muiTheme.palette.error.main + '16',
+                    '&:hover': { bgcolor: muiTheme.palette.error.main + '32' }
+                  }}
+                >
+                  <BlockIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Add Evidence Node" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => addNodeOfType('evidence')}
+                  sx={{ 
+                    color: muiTheme.palette.text.secondary,
+                    bgcolor: muiTheme.palette.text.secondary + '16',
+                    '&:hover': { bgcolor: muiTheme.palette.text.secondary + '32' }
+                  }}
+                >
+                  <HelpOutlineIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            
+            <Divider orientation="vertical" flexItem />
+            
+            {/* Connection type buttons instead of dropdown */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ mr: 1, fontWeight: 'medium' }}>
+                Connection:
+              </Typography>
+              
+              <Tooltip title="Necessary Connection" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => setSelectedEdgeType('necessary')}
+                  sx={{ 
+                    color: selectedEdgeType === 'necessary' ? muiTheme.palette.primary.main : 'text.secondary',
+                    bgcolor: selectedEdgeType === 'necessary' ? muiTheme.palette.primary.main + '16' : 'transparent',
+                    border: '1px solid',
+                    borderColor: selectedEdgeType === 'necessary' ? muiTheme.palette.primary.main : 'divider',
+                    '&:hover': { bgcolor: muiTheme.palette.primary.main + '24' },
+                    position: 'relative',
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      top: '50%',
+                      left: '20%',
+                      right: '20%',
+                      height: '2px',
+                      bgcolor: 'currentColor',
+                      transform: 'translateY(-50%)'
+                    }
+                  }}
+                >
+                  <ArrowRightAltIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Contributing Connection" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => setSelectedEdgeType('contributing')}
+                  sx={{ 
+                    color: selectedEdgeType === 'contributing' ? muiTheme.palette.secondary.main : 'text.secondary',
+                    bgcolor: selectedEdgeType === 'contributing' ? muiTheme.palette.secondary.main + '16' : 'transparent',
+                    border: '1px solid',
+                    borderColor: selectedEdgeType === 'contributing' ? muiTheme.palette.secondary.main : 'divider',
+                    '&:hover': { bgcolor: muiTheme.palette.secondary.main + '24' },
+                    position: 'relative',
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      top: '50%',
+                      left: '20%',
+                      right: '20%',
+                      height: '2px',
+                      bgcolor: 'currentColor',
+                      transform: 'translateY(-50%)',
+                      borderTop: '1px dashed currentColor'
+                    }
+                  }}
+                >
+                  <ArrowRightAltIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Possible Connection" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => setSelectedEdgeType('possible')}
+                  sx={{ 
+                    color: selectedEdgeType === 'possible' ? muiTheme.palette.info.main : 'text.secondary',
+                    bgcolor: selectedEdgeType === 'possible' ? muiTheme.palette.info.main + '16' : 'transparent',
+                    border: '1px solid',
+                    borderColor: selectedEdgeType === 'possible' ? muiTheme.palette.info.main : 'divider',
+                    '&:hover': { bgcolor: muiTheme.palette.info.main + '24' },
+                    position: 'relative',
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      top: '50%',
+                      left: '20%',
+                      right: '20%',
+                      height: '1px',
+                      bgcolor: 'currentColor',
+                      transform: 'translateY(-50%)',
+                      borderTop: '1px dotted currentColor'
+                    }
+                  }}
+                >
+                  <ArrowRightAltIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Correlation Connection" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={() => setSelectedEdgeType('correlation')}
+                  sx={{ 
+                    color: selectedEdgeType === 'correlation' ? muiTheme.palette.warning.main : 'text.secondary',
+                    bgcolor: selectedEdgeType === 'correlation' ? muiTheme.palette.warning.main + '16' : 'transparent',
+                    border: '1px solid',
+                    borderColor: selectedEdgeType === 'correlation' ? muiTheme.palette.warning.main : 'divider',
+                    '&:hover': { bgcolor: muiTheme.palette.warning.main + '24' },
+                    position: 'relative',
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      top: '50%',
+                      left: '20%',
+                      right: '20%',
+                      height: '2px',
+                      bgcolor: 'currentColor',
+                      transform: 'translateY(-50%)',
+                      opacity: 0.5
+                    }
+                  }}
+                >
+                  <ArrowRightAltIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            
+            <Divider orientation="vertical" flexItem />
+            
+            {/* Actions */}
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Tooltip title="Delete Selected Node" arrow>
+                <span>
+                  <IconButton 
+                    size="small" 
+                    onClick={deleteSelectedNode}
+                    disabled={!selectedNode}
+                    sx={{ 
+                      color: muiTheme.palette.error.main,
+                      bgcolor: selectedNode ? muiTheme.palette.error.main + '16' : undefined,
+                      '&:hover': { bgcolor: selectedNode ? muiTheme.palette.error.main + '32' : undefined }
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              
+              <Tooltip title="Save Diagram" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={saveDiagram}
+                  disabled={!currentProject}
+                  sx={{ 
+                    color: muiTheme.palette.success.main,
+                    bgcolor: currentProject ? muiTheme.palette.success.main + '16' : undefined,
+                    '&:hover': { bgcolor: currentProject ? muiTheme.palette.success.main + '32' : undefined }
+                  }}
+                >
+                  <SaveIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Analyze Diagram" arrow>
+                <IconButton 
+                  size="small" 
+                  onClick={analyzeWithWBA}
+                  disabled={!currentProject?.nodes?.length}
+                  sx={{ 
+                    color: muiTheme.palette.primary.main,
+                    bgcolor: currentProject?.nodes?.length ? muiTheme.palette.primary.main + '16' : undefined,
+                    '&:hover': { bgcolor: currentProject?.nodes?.length ? muiTheme.palette.primary.main + '32' : undefined }
+                  }}
+                >
+                  <AnalyticsIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Paper>
+        </Panel>
+        
+        {/* Project info */}
+        <Panel position="top-right">
+          <Paper 
+            elevation={3}
+            sx={{ 
+              p: 1,
+              borderRadius: 2,
+              bgcolor: mode === 'dark' 
+                ? muiTheme.palette.background.paper 
+                : muiTheme.palette.common.white,
+              border: '1px solid',
+              borderColor: mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.12)' 
+                : 'rgba(0, 0, 0, 0.12)',
+            }}
+          >
+            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+              {currentProject?.name || 'Untitled Analysis'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {nodes?.length || 0} nodes • {edges?.length || 0} connections
+            </Typography>
+          </Paper>
+        </Panel>
+        
+        {/* Selected node info */}
+        {selectedNode && (
+          <Panel position="bottom-center">
+            <Paper 
+              elevation={3}
+              sx={{ 
+                p: 1,
+                borderRadius: 2,
+                bgcolor: mode === 'dark' 
+                  ? muiTheme.palette.background.paper 
+                  : muiTheme.palette.common.white,
+                border: '1px solid',
+                borderColor: mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.12)' 
+                  : 'rgba(0, 0, 0, 0.12)',
+                mb: 2,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                Selected: <span style={{ color: muiTheme.palette.primary.main }}>{selectedNode.data.label}</span>
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                (Click on the node to edit it)
+              </Typography>
+            </Paper>
+          </Panel>
+        )}
+      </ReactFlow>
     </Box>
   );
 };
 
-export default DiagramView; 
+// Wrap with ReactFlowProvider to ensure context is available
+const DiagramViewWithProvider = () => (
+  <ReactFlowProvider>
+    <DiagramView />
+  </ReactFlowProvider>
+);
+
+export default DiagramViewWithProvider; 

@@ -4,6 +4,7 @@ import type { Edge, Node } from 'reactflow';
 import { checkOllamaConnection, streamOllamaChat } from '../config/api';
 import { ModelProvider, OllamaSettings, AzureOpenAISettings } from '../types';
 import { RCAAgentService } from '../utils/rcaAgentService';
+import { WBAAgentService } from '../utils/wbaAgentService';
 
 // Define project structure
 export interface Project {
@@ -30,8 +31,8 @@ export interface AIService {
   chat: (message: string) => Promise<string>;
   streamChat: (message: string, onChunk: (chunk: string) => void) => Promise<void>;
   analyzeNodes: (nodes: Node[], edges: Edge[]) => Promise<string>;
-  generateReportFromDiagram: (project: Project | null) => Promise<string>;
-  generateSlidesFromReport: (project: Project | null) => Promise<string>;
+  generateReportFromDiagram: (project: Project | undefined) => Promise<string>;
+  generateSlidesFromReport: (project: Project | undefined) => Promise<string>;
   searchEvidence: (query: string) => Promise<string>;
 }
 
@@ -66,6 +67,8 @@ export interface AppContextType {
   selectedPromptTemplate: string;
   setSelectedPromptTemplate: (template: string) => void;
   promptTemplates: Record<string, { name: string; content: string }>;
+  useWBAAgent: boolean;
+  setUseWBAAgent: (useWBA: boolean) => void;
 }
 
 // Create the context
@@ -128,7 +131,7 @@ class OllamaAIService implements AIService {
     return this.chat(prompt);
   }
   
-  async generateReportFromDiagram(project: Project | null): Promise<string> {
+  async generateReportFromDiagram(project: Project | undefined): Promise<string> {
     if (!project) return "No project selected.";
     
     const diagramDescription = this.describeDiagram(project.nodes, project.edges);
@@ -137,7 +140,7 @@ class OllamaAIService implements AIService {
     return this.chat(prompt);
   }
   
-  async generateSlidesFromReport(project: Project | null): Promise<string> {
+  async generateSlidesFromReport(project: Project | undefined): Promise<string> {
     if (!project) return "No project selected.";
     if (!project.report) return "No report available. Generate a report first.";
     
@@ -194,7 +197,7 @@ class MockAzureAIService implements AIService {
     return "Based on your diagram, I can see several potential root causes. The primary issue appears to be the database connection pool exhaustion, which was triggered by a memory leak in the connection handling code.";
   }
   
-  async generateReportFromDiagram(project: Project | null): Promise<string> {
+  async generateReportFromDiagram(project: Project | undefined): Promise<string> {
     await new Promise(resolve => setTimeout(resolve, 2000));
     return `# Root Cause Analysis Report
 
@@ -241,7 +244,7 @@ This incident highlights the importance of proper resource management and monito
 will prevent similar issues in the future and improve overall system stability.`;
   }
   
-  async generateSlidesFromReport(project: Project | null): Promise<string> {
+  async generateSlidesFromReport(project: Project | undefined): Promise<string> {
     await new Promise(resolve => setTimeout(resolve, 2000));
     return `# ${project?.name || 'Root Cause Analysis'}
 ## Executive Summary
@@ -307,12 +310,12 @@ export const AppContextProvider: React.FC<{ children: ReactNode }> = ({ children
   // Model settings state
   const [modelProvider, setModelProvider] = useState<ModelProvider>('ollama');
   const [ollamaSettings, setOllamaSettings] = useState<OllamaSettings>({
-    model: '',
+    model: 'llama3',
     temperature: 0.7,
     topP: 0.9,
     useFixedSeed: false,
     seed: 42,
-    numCtx: 2048,
+    numCtx: 4096,
     streaming: true,
   });
   const [azureSettings, setAzureSettings] = useState<AzureOpenAISettings>({
@@ -359,33 +362,68 @@ export const AppContextProvider: React.FC<{ children: ReactNode }> = ({ children
     'root-cause-analysis': {
       name: 'Root Cause Analysis',
       content: "You are an expert Root Cause Analysis consultant. Guide the user through the 5 Whys technique and other RCA methodologies. Help identify causal factors, distinguish symptoms from causes, and develop effective preventive measures."
+    },
+    'wba-problem-definition': {
+      name: 'WBA: Problem Definition',
+      content: "You are an AI assistant integrated into a Why-Because Analysis (WBA) application called DrillDown. We are starting the WBA process. Help the user define their focal problem clearly. This should be a specific, observable event or condition that needs explanation. Ask clarifying questions to make the problem statement precise and well-bounded. A good problem statement answers: What happened? When? Where? How was it detected? What was the impact? Avoid including causes in the problem statement itself."
+    },
+    'wba-cause-elicitation': {
+      name: 'WBA: Cause Elicitation',
+      content: "You are an AI assistant integrated into a Why-Because Analysis (WBA) application called DrillDown. We are now identifying causes for our problem or for a specific factor in our diagram. Apply counterfactual thinking: 'If this cause hadn't occurred, would the effect still have happened?' Help the user identify necessary causal factors. For each factor, consider if it's: an event (something that happened at a specific time), a condition (a state that persisted), an action (something someone did), or an omission (something that didn't happen but should have). Encourage the user to be specific and provide evidence for each cause."
+    },
+    'wba-evidence-gathering': {
+      name: 'WBA: Evidence Gathering',
+      content: "You are an AI assistant integrated into a Why-Because Analysis (WBA) application called DrillDown. We need evidence to support the causal relationships in our diagram. Guide the user to provide concrete evidence for each cause-effect link. Good evidence can include: data, observations, expert testimony, documentation, etc. For each piece of evidence, assess its quality, relevance, and how strongly it supports the cause. Flag any unsupported assertions or weak evidence that needs strengthening."
+    },
+    'wba-link-verification': {
+      name: 'WBA: Link Verification',
+      content: "You are an AI assistant integrated into a Why-Because Analysis (WBA) application called DrillDown. We are verifying the causal links in our diagram. For each link, apply the Counterfactual Test: 'If cause X had not occurred, would effect Y still have happened?' If the answer is 'yes,' then X may not be a necessary cause of Y. Help the user determine if each link represents: a necessary cause (Y would not have happened without X), a contributing factor (X made Y more likely but wasn't solely sufficient), a possible cause (uncertainty about necessity), or just a correlation (no causal relationship proven). Suggest revisions where causal reasoning appears flawed."
     }
   };
   
+  // Add WBA agent state
+  const [useWBAAgent, setUseWBAAgent] = useState<boolean>(false);
+  
   // Initialize AI Service based on selected provider
   useEffect(() => {
-    if (modelProvider === 'ollama' && ollamaSettings) {
-      // Use the new RCA Agent Service instead of the basic Ollama service
-      const rcaService = new RCAAgentService(ollamaSettings);
-      
-      // Pass in the current chat history
-      rcaService.setChatHistory(chatHistory);
-      
-      setAiService(rcaService);
-      
-      // Check connection
-      checkConnection();
-    } else if (modelProvider === 'azure' && azureSettings) {
+    if (modelProvider === 'ollama') {
+      if (isOllamaConnected) {
+        if (useWBAAgent) {
+          // Use the structured WBA agent with state machine for guidance
+          const wbaAgent = new WBAAgentService({
+            ...ollamaSettings,
+            systemPrompt: systemPrompt
+          });
+          if (currentProject) {
+            wbaAgent.setProject(currentProject);
+          }
+          setAiService(wbaAgent);
+        } else {
+          // Use the existing RCA agent
+          setAiService(new RCAAgentService(ollamaSettings));
+        }
+      } else if (isRetryingConnection) {
+        setAiService(null);
+      } else if (fallbackMode) {
+        setAiService(new MockAIService());
+      } else {
+        setAiService(null);
+      }
+    } else if (modelProvider === 'azure') {
       setAiService(new MockAzureAIService());
     } else {
       setAiService(null);
     }
-  }, [modelProvider, ollamaSettings, azureSettings]);
+  }, [modelProvider, isOllamaConnected, isRetryingConnection, fallbackMode, ollamaSettings, useWBAAgent, currentProject, systemPrompt]);
 
-  // Update the RCA service with the latest chat history when it changes
+  // Update the service with the latest chat history when it changes
   useEffect(() => {
     if (aiService && modelProvider === 'ollama') {
-      (aiService as RCAAgentService).setChatHistory(chatHistory);
+      if (aiService instanceof RCAAgentService) {
+        (aiService as RCAAgentService).setChatHistory(chatHistory);
+      } else if (aiService instanceof WBAAgentService) {
+        (aiService as WBAAgentService).setChatHistory(chatHistory);
+      }
     }
   }, [chatHistory, aiService, modelProvider]);
   
@@ -493,21 +531,12 @@ export const AppContextProvider: React.FC<{ children: ReactNode }> = ({ children
     });
   }, []);
 
-  // Include the system prompt when creating or updating the AI service
+  // Update WBA agent when project changes if using WBA agent
   useEffect(() => {
-    if (modelProvider === 'ollama' && isOllamaConnected) {
-      const ollamaService = new RCAAgentService({
-        ...ollamaSettings,
-        systemPrompt // Pass the system prompt to the service
-      });
-      setAiService(ollamaService);
-    } else if (modelProvider === 'azure') {
-      // Add Azure support later
-      setAiService(null);
-    } else {
-      setAiService(null);
+    if (useWBAAgent && aiService && aiService instanceof WBAAgentService && currentProject) {
+      (aiService as WBAAgentService).setProject(currentProject);
     }
-  }, [modelProvider, isOllamaConnected, ollamaSettings, systemPrompt]); // Add systemPrompt as a dependency
+  }, [useWBAAgent, aiService, currentProject]);
 
   return (
     <AppContext.Provider
@@ -541,6 +570,8 @@ export const AppContextProvider: React.FC<{ children: ReactNode }> = ({ children
         selectedPromptTemplate,
         setSelectedPromptTemplate,
         promptTemplates,
+        useWBAAgent,
+        setUseWBAAgent,
       }}
     >
       {children}
@@ -578,7 +609,7 @@ class MockAIService implements AIService {
     return "Node analysis is not available in fallback mode. Please connect to Ollama to use this feature.";
   }
 
-  async generateReportFromDiagram(project: Project | null): Promise<string> {
+  async generateReportFromDiagram(project: Project | undefined): Promise<string> {
     if (!project) return "No project selected.";
     
     return `# Root Cause Analysis Report (Fallback Mode)
@@ -600,7 +631,7 @@ To generate a complete report with findings based on your diagram, please ensure
 Note: This is a placeholder report generated because we couldn't connect to the Ollama API.`;
   }
 
-  async generateSlidesFromReport(project: Project | null): Promise<string> {
+  async generateSlidesFromReport(project: Project | undefined): Promise<string> {
     if (!project) return "No project selected.";
     
     return `# Root Cause Analysis Findings

@@ -4,24 +4,26 @@ import {
   Typography,
   TextField,
   FormControl,
+  FormControlLabel,
+  Switch,
   InputAdornment,
   Slider,
   Tooltip,
   IconButton,
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import type { AzureOpenAISettings } from '../types';
+import type { OllamaSettings } from '../types';
 
-interface AzureOpenAISettingsProps {
-  settings: AzureOpenAISettings;
-  onSettingsChange: (settings: AzureOpenAISettings) => void;
+interface OllamaModelSettingsProps {
+  settings: OllamaSettings;
+  onSettingsChange: (settings: OllamaSettings) => void;
 }
 
-const AzureOpenAISettings: React.FC<AzureOpenAISettingsProps> = ({ 
+const OllamaModelSettings: React.FC<OllamaModelSettingsProps> = ({ 
   settings, 
   onSettingsChange 
 }) => {
-  const handleChange = (field: keyof AzureOpenAISettings, value: any) => {
+  const handleChange = (field: keyof OllamaSettings, value: any) => {
     onSettingsChange({
       ...settings,
       [field]: value
@@ -30,20 +32,20 @@ const AzureOpenAISettings: React.FC<AzureOpenAISettingsProps> = ({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="h6" gutterBottom>Azure OpenAI Settings</Typography>
+      <Typography variant="h6" gutterBottom>Ollama Model Settings</Typography>
       
       <FormControl fullWidth variant="outlined" size="small">
         <TextField
-          label="API Endpoint"
-          value={settings.endpoint}
-          onChange={(e) => handleChange('endpoint', e.target.value)}
-          placeholder="https://your-resource-name.openai.azure.com/"
+          label="Model Name"
+          value={settings.model}
+          onChange={(e) => handleChange('model', e.target.value)}
+          placeholder="llama3, mistral, mixtral, etc."
           size="small"
-          helperText="Your Azure OpenAI API endpoint"
+          helperText="Enter the name of the model you want to use with Ollama"
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <Tooltip title="Azure OpenAI endpoint URL from your resource">
+                <Tooltip title="Model must be available in your Ollama installation">
                   <IconButton edge="end" size="small">
                     <HelpOutlineIcon fontSize="small" />
                   </IconButton>
@@ -51,40 +53,6 @@ const AzureOpenAISettings: React.FC<AzureOpenAISettingsProps> = ({
               </InputAdornment>
             ),
           }}
-        />
-      </FormControl>
-
-      <FormControl fullWidth variant="outlined" size="small">
-        <TextField
-          label="API Key"
-          value={settings.apiKey}
-          onChange={(e) => handleChange('apiKey', e.target.value)}
-          placeholder="Your Azure OpenAI API key"
-          size="small"
-          type="password"
-          helperText="API key from Azure portal"
-        />
-      </FormControl>
-
-      <FormControl fullWidth variant="outlined" size="small">
-        <TextField
-          label="Deployment ID"
-          value={settings.deploymentId}
-          onChange={(e) => handleChange('deploymentId', e.target.value)}
-          placeholder="Your deployment name"
-          size="small"
-          helperText="The name of your model deployment"
-        />
-      </FormControl>
-
-      <FormControl fullWidth variant="outlined" size="small">
-        <TextField
-          label="API Version"
-          value={settings.apiVersion}
-          onChange={(e) => handleChange('apiVersion', e.target.value)}
-          placeholder="2023-05-15"
-          size="small"
-          helperText="Azure OpenAI API version (e.g., 2023-05-15)"
         />
       </FormControl>
 
@@ -133,8 +101,54 @@ const AzureOpenAISettings: React.FC<AzureOpenAISettingsProps> = ({
           ]}
         />
       </Box>
+
+      <FormControlLabel
+        control={
+          <Switch
+            checked={settings.streaming ?? true}
+            onChange={(e) => handleChange('streaming', e.target.checked)}
+            color="primary"
+          />
+        }
+        label="Enable streaming responses"
+      />
+
+      <FormControlLabel
+        control={
+          <Switch
+            checked={settings.useFixedSeed ?? false}
+            onChange={(e) => handleChange('useFixedSeed', e.target.checked)}
+            color="primary"
+          />
+        }
+        label="Use fixed seed"
+      />
+
+      {settings.useFixedSeed && (
+        <FormControl fullWidth variant="outlined" size="small">
+          <TextField
+            label="Seed Value"
+            type="number"
+            value={settings.seed || 0}
+            onChange={(e) => handleChange('seed', parseInt(e.target.value, 10))}
+            size="small"
+            helperText="Fixed seed for reproducible outputs"
+          />
+        </FormControl>
+      )}
+
+      <FormControl fullWidth variant="outlined" size="small">
+        <TextField
+          label="Context Length"
+          type="number"
+          value={settings.numCtx || 2048}
+          onChange={(e) => handleChange('numCtx', parseInt(e.target.value, 10))}
+          size="small"
+          helperText="Maximum context length (in tokens)"
+        />
+      </FormControl>
     </Box>
   );
 };
 
-export default AzureOpenAISettings; 
+export default OllamaModelSettings; 

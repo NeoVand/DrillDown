@@ -220,7 +220,7 @@ export class RCAAgentService implements AIService {
   }
   
   // Generate a report from the diagram
-  async generateReportFromDiagram(project: Project | null): Promise<string> {
+  async generateReportFromDiagram(project: Project | undefined): Promise<string> {
     if (!project) {
       return "No project is currently selected. Please select or create a project first.";
     }
@@ -245,7 +245,7 @@ export class RCAAgentService implements AIService {
   }
   
   // Generate slides from a report
-  async generateSlidesFromReport(project: Project | null): Promise<string> {
+  async generateSlidesFromReport(project: Project | undefined): Promise<string> {
     if (!project) {
       return "No project is currently selected. Please select or create a project first.";
     }

@@ -48,7 +48,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           m: 0,
           p: 0
         }}>
-          {mainContent || rightPanel}
+          {rightPanel}
         </Grid>
       </Grid>
     </Box>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -17,6 +17,12 @@ import {
   Select,
   MenuItem,
   Divider,
+  FormControlLabel,
+  Switch,
+  Alert,
+  IconButton,
+  Tooltip,
+  InputAdornment
 } from '@mui/material';
 import ModelSettings from './ModelSettings';
 import OllamaConnectionModal from './OllamaConnectionModal';
@@ -26,6 +32,9 @@ import ErrorIcon from '@mui/icons-material/Error';
 import TuneIcon from '@mui/icons-material/Tune';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { alpha } from '@mui/material/styles';
+import HelpIcon from '@mui/icons-material/Help';
+import SettingsIcon from '@mui/icons-material/Settings';
+import ScienceIcon from '@mui/icons-material/Science';
 
 interface ModelSettingsDialogProps {
   open: boolean;
@@ -46,21 +55,24 @@ function TabPanel(props: TabPanelProps) {
     <div
       role="tabpanel"
       hidden={value !== index}
-      id={`settings-tabpanel-${index}`}
-      aria-labelledby={`settings-tab-${index}`}
+      id={`model-settings-tabpanel-${index}`}
+      aria-labelledby={`model-settings-tab-${index}`}
       {...other}
-      style={{ 
-        height: '100%', 
-        overflow: 'auto',
-        width: '100%',
-        overflowX: 'hidden'
-      }}
     >
       {value === index && (
-        <Box sx={{ pt: 2, width: '100%' }}>{children}</Box>
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
       )}
     </div>
   );
+}
+
+function a11yProps(index: number) {
+  return {
+    id: `model-settings-tab-${index}`,
+    'aria-controls': `model-settings-tabpanel-${index}`,
+  };
 }
 
 const ModelSettingsDialog: React.FC<ModelSettingsDialogProps> = ({ open, onClose }) => {
@@ -80,10 +92,19 @@ const ModelSettingsDialog: React.FC<ModelSettingsDialogProps> = ({ open, onClose
     selectedPromptTemplate,
     setSelectedPromptTemplate,
     promptTemplates,
+    useWBAAgent,
+    setUseWBAAgent
   } = useAppContext();
 
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [tabValue, setTabValue] = useState(0);
+
+  // Always ensure WBA agent is active
+  useEffect(() => {
+    if (!useWBAAgent) {
+      setUseWBAAgent(true);
+    }
+  }, [useWBAAgent, setUseWBAAgent]);
 
   // Handle tab change
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -121,7 +142,8 @@ const ModelSettingsDialog: React.FC<ModelSettingsDialogProps> = ({ open, onClose
   };
 
   const handleHelp = () => {
-    setShowConnectionModal(true);
+    // Open help resources in a new tab
+    window.open('https://github.com/your-organization/your-repository/wiki/Settings', '_blank');
   };
 
   return (
@@ -156,48 +178,40 @@ const ModelSettingsDialog: React.FC<ModelSettingsDialogProps> = ({ open, onClose
           }
         }}
       >
-        <Box sx={{ 
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          px: 2.5,
-          py: 1.5,
+        <DialogTitle sx={{ 
+          bgcolor: 'primary.dark', 
+          color: 'white',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          alignItems: 'center' 
         }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Settings
-          </Typography>
-          
-          {modelProvider === 'ollama' && (
-            <Chip
-              size="small"
-              icon={isOllamaConnected ? <CheckCircleIcon fontSize="small" /> : <ErrorIcon fontSize="small" />}
-              label={isOllamaConnected ? "Connected" : "Disconnected"}
-              color={isOllamaConnected ? "success" : "error"}
-              sx={{ ml: 1 }}
-            />
-          )}
-        </Box>
+          Model Settings
+          <Tooltip title="Settings Help">
+            <IconButton size="small" onClick={handleHelp} sx={{ color: 'white' }}>
+              <HelpIcon />
+            </IconButton>
+          </Tooltip>
+        </DialogTitle>
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2.5 }}>
           <Tabs 
             value={tabValue} 
             onChange={handleTabChange} 
-            aria-label="settings tabs"
+            aria-label="model settings tabs"
             variant="scrollable"
             scrollButtons="auto"
           >
             <Tab 
-              icon={<TuneIcon fontSize="small" />} 
-              iconPosition="start" 
-              label="Model" 
-              sx={{ textTransform: 'none', minHeight: 40 }}
-            />
-            <Tab 
               icon={<SmartToyIcon fontSize="small" />} 
               iconPosition="start" 
-              label="Prompts" 
-              sx={{ textTransform: 'none', minHeight: 40 }}
+              label="Model Settings" 
+              {...a11yProps(0)}
+            />
+            <Tab 
+              icon={<TuneIcon fontSize="small" />} 
+              iconPosition="start" 
+              label="System Prompt" 
+              {...a11yProps(1)}
             />
           </Tabs>
         </Box>
@@ -213,25 +227,43 @@ const ModelSettingsDialog: React.FC<ModelSettingsDialogProps> = ({ open, onClose
           pr: 2.5,
         }}>
           <TabPanel value={tabValue} index={0}>
+            {modelProvider === 'ollama' && (
+              <Alert severity={isOllamaConnected ? "success" : "warning"} sx={{ mb: 2 }}>
+                {isOllamaConnected 
+                  ? "Connected to Ollama server" 
+                  : "Not connected to Ollama server. Click Connect to establish connection."}
+                <Button 
+                  size="small" 
+                  sx={{ ml: 2 }} 
+                  variant="outlined"
+                  onClick={() => setShowConnectionModal(true)}
+                >
+                  {isOllamaConnected ? "Test Connection" : "Connect"}
+                </Button>
+              </Alert>
+            )}
+            
             <ModelSettings
               onProviderChange={handleProviderChange}
               ollamaSettings={ollamaSettings}
               onOllamaSettingsChange={handleOllamaSettingsChange}
               azureSettings={azureSettings}
               onAzureSettingsChange={handleAzureSettingsChange}
-              onHelp={handleHelp}
+              hideTitle={false}
+              onHelp={() => setShowConnectionModal(true)}
             />
           </TabPanel>
           
           <TabPanel value={tabValue} index={1}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
-              <FormControl size="small" fullWidth>
-                <InputLabel id="prompt-template-label">Prompt Template</InputLabel>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" gutterBottom>Prompt Template</Typography>
+              <FormControl fullWidth variant="outlined" size="small">
+                <InputLabel id="prompt-template-label">Template</InputLabel>
                 <Select
                   labelId="prompt-template-label"
                   id="prompt-template-select"
                   value={selectedPromptTemplate}
-                  label="Prompt Template"
+                  label="Template"
                   onChange={handlePromptTemplateChange as any}
                   size="small"
                 >
@@ -240,41 +272,31 @@ const ModelSettingsDialog: React.FC<ModelSettingsDialogProps> = ({ open, onClose
                   ))}
                 </Select>
               </FormControl>
-              
-              <TextField
-                label="System Prompt"
-                multiline
-                rows={8}
-                fullWidth
+            </Box>
+            
+            <TextField
+              label="System Prompt"
+              multiline
+              rows={8}
+              fullWidth
+              variant="outlined"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              size="small"
+            />
+            
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
+              <Button 
                 variant="outlined"
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
                 size="small"
-              />
-              
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
-                <Button 
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    if (selectedPromptTemplate in promptTemplates) {
-                      setSystemPrompt(promptTemplates[selectedPromptTemplate as keyof typeof promptTemplates].content);
-                    }
-                  }}
-                >
-                  Reset to Default
-                </Button>
-                <Button 
-                  variant="contained"
-                  size="small"
-                  onClick={() => {
-                    // The changes are automatically saved to context when setSystemPrompt is called
-                    // We might want to add feedback here eventually
-                  }}
-                >
-                  Save Changes
-                </Button>
-              </Box>
+                onClick={() => {
+                  if (selectedPromptTemplate in promptTemplates) {
+                    setSystemPrompt(promptTemplates[selectedPromptTemplate as keyof typeof promptTemplates].content);
+                  }
+                }}
+              >
+                Reset to Default
+              </Button>
             </Box>
           </TabPanel>
         </DialogContent>
